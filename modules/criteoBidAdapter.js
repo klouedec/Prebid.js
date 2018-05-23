@@ -2,8 +2,9 @@ import { loadExternalScript } from 'src/adloader';
 import { registerBidder } from 'src/adapters/bidderFactory';
 import { parse } from 'src/url';
 import * as utils from 'src/utils';
+import { b64tohex, b64utohex, CryptoJS, RSAKey } from 'jsrsasign';
 
-const ADAPTER_VERSION = 7;
+const ADAPTER_VERSION = 8;
 const BIDDER_CODE = 'criteo';
 const CDB_ENDPOINT = '//bidder.criteo.com/cdb';
 const CRITEO_VENDOR_ID = 91;
@@ -14,6 +15,14 @@ const PROFILE_ID = 207;
 
 // Unminified source code can be found in: https://github.com/Prebid-org/prebid-js-external-js-criteo/blob/master/dist/prod.js
 const PUBLISHER_TAG_URL = '//static.criteo.net/js/ld/publishertag.prebid.js';
+
+const FAST_BID_PUBKEY = {
+  "kty": "RSA",
+  "n": "ztQYwCE5BU7T9CDM5he6rKoabstXRmkzx54zFPZkWbK530dwtLBDeaWBMxHBUT55CYyboR_EZ4efghPi3CoNGfGWezpjko9P6p2EwGArtHEeS4slhu_SpSIFMjG6fdrpRoNuIAMhq1Z-Pr_-HOd1pThFKeGFr2_NhtAg-TXAzaU",
+  "e": "AQAB",
+  "alg": "RS256",
+  "use": "sig"
+};
 
 /** @type {BidderSpec} */
 export const spec = {
@@ -243,6 +252,37 @@ function createNativeAd(id, payload, callback) {
   </script>`;
 }
 
+function cryptoVerify(key, hash, code) {
+  var localHash = CryptoJS.SHA256(code).toString(CryptoJS.enc.Hex);
+
+  var rsaKey = new RSAKey();
+  rsaKey.setPublic(b64utohex(key.n), b64utohex(key.e));
+
+  return rsaKey.verifyWithMessageHash(localHash, b64tohex(hash));
+}
+
+function validateFastBid(fastBid) {
+  // The value stored must contain the file's encrypted hash as first line
+  const firstLineEnd = fastBid.indexOf('\n');
+  const firstLine = fastBid.substr(0, firstLineEnd).trim();
+  if (firstLine.substr(0, 9) !== '// Hash: ') {
+    utils.logWarn('No hash found in FastBid');
+    return false;
+  }
+
+  // Remove the hash part from the locally stored value
+  const fileEncryptedHash = firstLine.substr(9);
+  const publisherTag = fastBid.substr(firstLineEnd + 1);
+
+  // Verify the hash using cryptography
+  try {
+    return cryptoVerify(FAST_BID_PUBKEY, fileEncryptedHash, publisherTag);
+  } catch (e) {
+    utils.logWarn('Failed to verify Criteo FastBid');
+    return undefined;
+  }
+}
+
 /**
  * @return {boolean}
  */
@@ -250,13 +290,17 @@ function tryGetCriteoFastBid() {
   try {
     const fastBid = localStorage.getItem('criteo_fast_bid');
     if (fastBid !== null) {
-      eval(fastBid); // eslint-disable-line no-eval
-      return true;
+      if (validateFastBid(fastBid) === false) {
+        utils.logWarn('Invalid Criteo FastBid found');
+        localStorage.removeItem('criteo_fast_bid');
+      } else {
+        utils.logInfo('Using Criteo FastBid');
+        eval(fastBid); // eslint-disable-line no-eval
+      }
     }
   } catch (e) {
     // Unable to get fast bid
   }
-  return false;
 }
 
 registerBidder(spec);

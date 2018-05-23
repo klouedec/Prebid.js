@@ -66,6 +66,7 @@
     "istanbul": "^0.4.5",
     "istanbul-instrumenter-loader": "^3.0.0",
     "json-loader": "^0.5.1",
+    "jsrsasign": "^8.0.12",
     "karma": "^2.0.0",
     "karma-babel-preprocessor": "^6.0.1",
     "karma-browserstack-launcher": "^1.0.1",
