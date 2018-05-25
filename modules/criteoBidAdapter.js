@@ -4,7 +4,7 @@ import { parse } from 'src/url';
 import * as utils from 'src/utils';
 import { b64tohex, b64utohex, CryptoJS, RSAKey } from 'jsrsasign';
 
-const ADAPTER_VERSION = 8;
+const ADAPTER_VERSION = 9;
 const BIDDER_CODE = 'criteo';
 const CDB_ENDPOINT = '//bidder.criteo.com/cdb';
 const CRITEO_VENDOR_ID = 91;
