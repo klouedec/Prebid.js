@@ -2,6 +2,7 @@ import { loadExternalScript } from 'src/adloader';
 import { registerBidder } from 'src/adapters/bidderFactory';
 import { parse } from 'src/url';
 import * as utils from 'src/utils';
+import find from 'core-js/library/fn/array/find';
 import { b64tohex, b64utohex, CryptoJS, RSAKey } from 'jsrsasign';
 
 const ADAPTER_VERSION = 9;
@@ -92,7 +93,7 @@ export const spec = {
 
     if (body && body.slots && utils.isArray(body.slots)) {
       body.slots.forEach(slot => {
-        const bidRequest = request.bidRequests.find(b => b.adUnitCode === slot.impid && (!b.params.zoneId || parseInt(b.params.zoneId) === slot.zoneid));
+        const bidRequest = find(request.bidRequests, b => b.adUnitCode === slot.impid && (!b.params.zoneId || parseInt(b.params.zoneId) === slot.zoneid));
         const bidId = bidRequest.bidId;
         const bid = {
           requestId: bidId,
@@ -216,12 +217,17 @@ function buildCdbRequest(context, bidRequests, bidderRequest) {
     request.publisher.networkid = networkId;
   }
   if (bidderRequest && bidderRequest.gdprConsent) {
-    request.gdprConsent = {
-      gdprApplies: !!(bidderRequest.gdprConsent.gdprApplies),
-      consentData: bidderRequest.gdprConsent.consentString,
-      consentGiven: !!(bidderRequest.gdprConsent.vendorData && bidderRequest.gdprConsent.vendorData.vendorConsents &&
-        bidderRequest.gdprConsent.vendorData.vendorConsents[ CRITEO_VENDOR_ID.toString(10) ]),
-    };
+    request.gdprConsent = {};
+    if (typeof bidderRequest.gdprConsent.gdprApplies !== 'undefined') {
+      request.gdprConsent.gdprApplies = !!(bidderRequest.gdprConsent.gdprApplies);
+    }
+    if (bidderRequest.gdprConsent.vendorData && bidderRequest.gdprConsent.vendorData.vendorConsents &&
+      typeof bidderRequest.gdprConsent.vendorData.vendorConsents[ CRITEO_VENDOR_ID.toString(10) ] !== 'undefined') {
+      request.gdprConsent.consentGiven = !!(bidderRequest.gdprConsent.vendorData.vendorConsents[ CRITEO_VENDOR_ID.toString(10) ]);
+    }
+    if (typeof bidderRequest.gdprConsent.consentString !== 'undefined') {
+      request.gdprConsent.consentData = bidderRequest.gdprConsent.consentString;
+    }
   }
   return request;
 }
