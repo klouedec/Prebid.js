@@ -1,5 +1,6 @@
 import { expect } from 'chai';
-import { spec } from 'modules/criteoBidAdapter';
+import { cryptoVerify, spec, FAST_BID_PUBKEY_HEX_EXPONENT, FAST_BID_PUBKEY_HEX_MODULUS } from 'modules/criteoBidAdapter';
+import { hex_to_bytes } from 'asmcrypto.js/dist_es5/other/exportedUtils';
 import * as utils from 'src/utils';
 
 describe('The Criteo bidding adapter', () => {
@@ -292,6 +293,28 @@ describe('The Criteo bidding adapter', () => {
       expect(bids[0].ad).to.equal('test-ad');
       expect(bids[0].width).to.equal(728);
       expect(bids[0].height).to.equal(90);
+    });
+  });
+
+  describe('cryptoVerify', () => {
+    const publicKey = [
+      hex_to_bytes(FAST_BID_PUBKEY_HEX_MODULUS),
+      hex_to_bytes(FAST_BID_PUBKEY_HEX_EXPONENT),
+    ];
+
+    const TEST_HASH = 'vBeD8Q7GU6lypFbzB07W8hLGj7NL+p7dI9ro2tCxkrmyv0F6stNuoNd75Us33iNKfEoW+cFWypelr6OJPXxki2MXWatRhJuUJZMcK4VBFnxi3Ro+3a0xEfxE4jJm4eGe98iC898M+/YFHfp+fEPEnS6pEyw124ONIFZFrcejpHU=';
+
+    it('should verify right signature', () => {
+      expect(cryptoVerify(publicKey, TEST_HASH, 'test')).to.equal(true);
+    });
+
+    it('should verify wrong signature', () => {
+      expect(cryptoVerify(publicKey, TEST_HASH, 'test wrong')).to.equal(false);
+    });
+
+    it('should return undefined with incompatible browsers', () => {
+      // Here use a null hash to make the call to crypto library fail and simulate a browser failure
+      expect(cryptoVerify(publicKey, null, 'test')).to.equal.undefined;
     });
   });
 });
