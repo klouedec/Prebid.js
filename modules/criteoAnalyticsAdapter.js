@@ -70,11 +70,34 @@ function cacheEvent(eventType, event) {
     eventCache[eventType].push(event);
 }
 
+var biddingEndpoints = [
+    "//ib.adnxs.com/ut/v3/prebid", // AppNexus
+    "//bidder.criteo.com/cdb", // Criteo
+];
+function isBiddingEndpoint(url) {
+    for (var i in biddingEndpoints) {
+        if (url.indexOf(biddingEndpoints[i]) !== -1) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function cachePerformanceEntriesEvents() {
     if (!window.performance || !window.performance.getEntries) {
         return;
     }
-    eventCache[PERFORMANCE_ENTRIES_EVENT_TYPE] = window.performance.getEntries();
+
+    const entries = window.performance.getEntries();
+    const ret = [];
+    for (let i = 0; i < entries.length; ++i) {
+        const entry = entries[i];
+        if (entry.duration && isBiddingEndpoint(entry.name)) {
+            ret.push(entry);
+        }
+    }
+
+    eventCache[PERFORMANCE_ENTRIES_EVENT_TYPE] = ret;
 }
 
 function sendCachedEvents() {
