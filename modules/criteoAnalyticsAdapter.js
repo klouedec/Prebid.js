@@ -70,17 +70,18 @@ function cacheEvent(eventType, event) {
     eventCache[eventType].push(event);
 }
 
-var biddingEndpoints = [
-    "//ib.adnxs.com/ut/v3/prebid", // AppNexus
-    "//bidder.criteo.com/cdb", // Criteo
-];
-function isBiddingEndpoint(url) {
-    for (var i in biddingEndpoints) {
-        if (url.indexOf(biddingEndpoints[i]) !== -1) {
-            return true;
+var biddingEndpoints = {
+    appnexus: "//ib.adnxs.com/ut/v3/prebid",
+    criteo: "//bidder.criteo.com/cdb",
+};
+function getBidderCodeForUrl(url) {
+    for (var bidder in biddingEndpoints) {
+        const endpoint = biddingEndpoints[bidder];
+        if (url.indexOf(endpoint) !== -1) {
+            return bidder;
         }
     }
-    return false;
+    return undefined;
 }
 
 function cachePerformanceEntriesEvents() {
@@ -89,11 +90,15 @@ function cachePerformanceEntriesEvents() {
     }
 
     const entries = window.performance.getEntries();
-    const ret = [];
+    const ret = {};
     for (let i = 0; i < entries.length; ++i) {
         const entry = entries[i];
-        if (entry.duration && isBiddingEndpoint(entry.name)) {
-            ret.push(entry);
+        const bidder = getBidderCodeForUrl(entry.name);
+        if (entry.duration && bidder) {
+            if (!(bidder in ret)) {
+                ret[bidder] = [];
+            }
+            ret[bidder].push(entry);
         }
     }
 
