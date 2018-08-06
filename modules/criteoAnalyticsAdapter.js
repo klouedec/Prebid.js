@@ -112,9 +112,11 @@ function sendCachedEvents() {
     ajax(
         ANALYTICS_ENDPOINT,
         null,
-        cachedEvents,
+        JSON.stringify(cachedEvents),
         {
-          contentType: 'application/json'
+            contentType: 'text/plain',
+            method: 'POST',
+            withCredentials: true
         }
     );
 }

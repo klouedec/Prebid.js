@@ -43,7 +43,7 @@ describe('CriteoAnalyticsAdapter', function () {
         // Assert using a setTimeout as events are sent with a delay
         setTimeout(() => {
             expect(requests.length).to.equal(1);
-            expect(requests[0].url).to.equal('http://bidder.criteo.com/prebidAnalytics');
+            expect(requests[0].url).to.equal('http://bidder.criteo.com/prebid/analytics');
             expect(requests[0].method).to.equal('POST');
             expect(requests[0].requestBody.auctionEnd).to.deep.equal([ { aField: 'aFieldValue', durationSinceAuctionStart: 2 } ]);
             expect(requests[0].requestBody.bidTimeout).to.deep.equal([ { aTimeoutField: 'aTimeoutFieldValue', durationSinceAuctionStart: 2 } ]);
