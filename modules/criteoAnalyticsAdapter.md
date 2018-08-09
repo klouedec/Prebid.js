@@ -20,6 +20,7 @@ Analytics adapter for criteo.com. Contact pi-direct@criteo.com for information.
         pbjs.enableAnalytics([{
             provider: 'criteo',
             options: {
+                samplingPercentage: 100,
                 sendDelay: 3000
             }
         }]);
