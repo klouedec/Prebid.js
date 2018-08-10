@@ -2,7 +2,7 @@ import {ajax} from 'src/ajax';
 import adapter from 'src/AnalyticsAdapter';
 import CONSTANTS from 'src/constants.json';
 import adaptermanager from 'src/adaptermanager';
-import {logInfo} from 'src/utils';
+import {deepClone, logInfo} from 'src/utils';
 
 const {
   EVENTS: {
@@ -68,10 +68,12 @@ function cacheEvent(eventType, event) {
     eventCache[eventType] = [];
   }
 
+  // Clone event to not modify the same reference at each event (bidRequested, bidResponse...)
+  const clonedEvent = deepClone(event);
   // Add event duration since auction start on event and add it to the cache
-  event.durationSinceAuctionStart = Date.now() - auctionStartTime;
-  logInfo(`Caching event ${eventType}:`, event);
-  eventCache[eventType].push(event);
+  clonedEvent.durationSinceAuctionStart = Date.now() - auctionStartTime;
+  logInfo(`Caching event ${eventType}:`, clonedEvent);
+  eventCache[eventType].push(clonedEvent);
 }
 
 var biddingEndpoints = {
