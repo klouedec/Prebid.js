@@ -11,7 +11,7 @@ const {
   }
 } = CONSTANTS;
 
-const ANALYTICS_ENDPOINT = 'http://bidder.criteo.com/prebid/analytics';
+const ANALYTICS_ENDPOINT = '//bidder.criteo.com/prebid/analytics';
 const DEFAULT_SAMPLING_PERCENTAGE = 100;
 const DEFAULT_SEND_DELAY = 3000;
 const PERFORMANCE_ENTRIES_EVENT_TYPE = 'performanceEntries';
