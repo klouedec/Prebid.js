@@ -3,6 +3,7 @@ import { cryptoVerify, spec, FAST_BID_PUBKEY } from 'modules/criteoBidAdapter';
 import { createBid } from 'src/bidfactory';
 import CONSTANTS from 'src/constants.json';
 import * as utils from 'src/utils';
+import { NATIVE } from 'src/mediaTypes';
 
 describe('The Criteo bidding adapter', function () {
   beforeEach(function () {
@@ -198,6 +199,51 @@ describe('The Criteo bidding adapter', function () {
       expect(ortbRequest.gdprConsent.gdprApplies).to.equal(undefined);
       expect(ortbRequest.gdprConsent.consentGiven).to.equal(undefined);
     });
+
+    it('should properly build request with nativeCallback', function () {
+      const bidRequests = [
+        {
+          bidder: 'criteo',
+          adUnitCode: 'bid-123',
+          transactionId: 'transaction-123',
+          sizes: [[728, 90]],
+          params: {
+            zoneId: 123,
+            nativeCallback: () => {}
+          },
+        }
+      ];
+
+      const requestData = spec.buildRequests(bidRequests, bidderRequest).data;
+      expect(requestData.slots[0].native).to.be.true;
+    });
+
+    it('should properly build request when mediaTypes.native is defined', function() {
+      const bidRequests = [
+        {
+          bidder: 'criteo',
+          adUnitCode: 'bid-123',
+          transactionId: 'transaction-123',
+          sizes: [[728, 90]],
+          params: {
+            zoneId: 123
+          },
+          mediaTypes: {
+            native: {
+              title: {
+                required: true
+              },
+              image: {
+                required: true
+              }
+            }
+          },
+        }
+      ];
+
+      const requestData = spec.buildRequests(bidRequests, bidderRequest).data;
+      expect(requestData.slots[0].native).to.be.true;
+    });
   });
 
   describe('interpretResponse', function () {
@@ -334,6 +380,156 @@ describe('The Criteo bidding adapter', function () {
       expect(bids).to.have.lengthOf(2);
       const prebidBids = bids.map(bid => Object.assign(createBid(CONSTANTS.STATUS.GOOD, request.bidRequests[0]), bid));
       expect(prebidBids[0].adId).to.not.equal(prebidBids[1].adId);
+    });
+
+    describe('native ad', function() {
+      const response = {
+        body: {
+          slots: [{
+            impid: 'test-requestId',
+            bidId: 'abc123',
+            cpm: 1.23,
+            creative: 'test-ad',
+            width: 728,
+            height: 90,
+            zoneid: 123,
+            native: {
+              advertiser: {
+                description: 'Our digital marketing solutions are trusted',
+                domain: 'criteo.com',
+                logo: {
+                  height: 300,
+                  url: 'https://www.criteo.com/images/criteo-logo.svg',
+                  width: 90
+                },
+                logo_click_url: 'https://www.criteo.com'
+              },
+              impression_pixels: [
+                {
+                  url: 'https://my-impression-pixel/test/impression'
+                },
+                {
+                  url: 'https://cas.com/lg.com'
+                }
+              ],
+              privacy: {
+                long_legal_text: '',
+                optout_click_url: 'https://info.criteo.com/privacy/informations',
+                optout_image_url: 'https://static.criteo.net/flash/icon/nai_small.png'
+              },
+              products: [
+                {
+                  call_to_action: 'Try it now!',
+                  click_url: 'https://www.criteo.com/products/',
+                  description: 'A smart solution for your Native advertising',
+                  image: {
+                    height: 728,
+                    url: 'https://publisherdirect.criteo.com/publishertag/preprodtest/creative.png',
+                    width: 90
+                  },
+                  price: '10$',
+                  title: 'Criteo native solution'
+                }
+              ]
+            },
+          }],
+        },
+      };
+
+      it('should properly parse native slot if nativeCallback is defined', function() {
+        const request = {
+          bidRequests: [
+            {
+              bidder: 'criteo',
+              adUnitCode: 'test-requestId',
+              transactionId: 'transaction-123',
+              sizes: [[728, 90]],
+              params: {
+                zoneId: 123,
+                nativeCallback: () => {}
+              },
+            }
+          ]
+        };
+
+        const bids = spec.interpretResponse(response, request);
+        expect(bids).to.have.lengthOf(1);
+        expect(bids[0].mediaType).to.be.undefined;
+        expect(bids[0].native).to.be.undefined;
+        expect(bids[0].ad).not.to.be.undefined;
+      });
+
+      it('should properly parse native slot if mediaType.native is true', function() {
+        const request = {
+          bidRequests: [
+            {
+              bidder: 'criteo',
+              adUnitCode: 'test-requestId',
+              transactionId: 'transaction-123',
+              sizes: [[728, 90]],
+              params: {
+                zoneId: 123
+              },
+              mediaTypes: {
+                native: {
+                  title: {
+                    required: true
+                  }
+                }
+              },
+            }
+          ]
+        };
+
+        const bids = spec.interpretResponse(response, request);
+        expect(bids).to.have.lengthOf(1);
+        expect(bids[0].ad).to.be.undefined;
+        expect(bids[0].native).not.to.be.undefined;
+        expect(bids[0].mediaType).to.equal(NATIVE);
+
+        // Test field mapping
+        const nativeBid = bids[0].native;
+        expect(nativeBid.title).to.equal('Criteo native solution');
+        expect(nativeBid.body).to.equal('A smart solution for your Native advertising');
+        expect(nativeBid.sponsoredBy).to.equal('Our digital marketing solutions are trusted');
+        expect(nativeBid.icon.url).to.equal('https://www.criteo.com/images/criteo-logo.svg');
+        expect(nativeBid.image.url).to.equal('https://publisherdirect.criteo.com/publishertag/preprodtest/creative.png');
+        expect(nativeBid.clickUrl).to.equal('https://www.criteo.com/products/');
+        expect(nativeBid.privacyLink).to.equal('https://info.criteo.com/privacy/informations');
+        expect(nativeBid.privacyIcon).to.equal('https://static.criteo.net/flash/icon/nai_small.png');
+        expect(nativeBid.cta).to.equal('Try it now!');
+        expect(nativeBid.price).to.equal('10$');
+      });
+
+      it('When both nativeCallback and mediaType.native is defined, should parse response only for nativeCallback', function() {
+        const request = {
+          bidRequests: [
+            {
+              bidder: 'criteo',
+              adUnitCode: 'test-requestId',
+              transactionId: 'transaction-123',
+              sizes: [[728, 90]],
+              params: {
+                zoneId: 123,
+                nativeCallback: () => {}
+              },
+              mediaTypes: {
+                native: {
+                  title: {
+                    required: true
+                  }
+                }
+              },
+            }
+          ]
+        };
+
+        const bids = spec.interpretResponse(response, request);
+        expect(bids).to.have.lengthOf(1);
+        expect(bids[0].mediaType).to.be.undefined;
+        expect(bids[0].native).to.be.undefined;
+        expect(bids[0].ad).not.to.be.undefined;
+      });
     });
   });
 

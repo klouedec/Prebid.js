@@ -1,7 +1,8 @@
-import { loadExternalScript } from '../src/adloader';
-import { registerBidder } from '../src/adapters/bidderFactory';
-import { parse } from '../src/url';
-import * as utils from '../src/utils';
+import { loadExternalScript } from 'src/adloader';
+import { registerBidder } from 'src/adapters/bidderFactory';
+import { parse } from 'src/url';
+import * as utils from 'src/utils';
+import { BANNER, NATIVE } from 'src/mediaTypes';
 import find from 'core-js/library/fn/array/find';
 import JSEncrypt from 'jsencrypt/bin/jsencrypt';
 import sha256 from 'crypto-js/sha256';
@@ -29,6 +30,7 @@ OmOSj0/qnYTAYCu0cR5LiyWG79KlIgUyMbp92ulGg24gAyGrVn4+v/4c53WlOEUp
 /** @type {BidderSpec} */
 export const spec = {
   code: BIDDER_CODE,
+  supportedMediaTypes: [BANNER, NATIVE],
 
   /**
    * @param {object} bid
@@ -108,7 +110,12 @@ export const spec = {
           height: slot.height,
         }
         if (slot.native) {
-          bid.ad = createNativeAd(bidId, slot.native, bidRequest.params.nativeCallback);
+          if (bidRequest.params.nativeCallback) {
+            bid.ad = createCriteoNativeAdWithCallback(bidId, slot.native, bidRequest.params.nativeCallback);
+          } else {
+            bid.native = createPrebidNativeAd(slot.native);
+            bid.mediaType = NATIVE;
+          }
         } else {
           bid.ad = slot.creative;
         }
@@ -230,7 +237,7 @@ function buildCdbRequest(context, bidRequests, bidderRequest) {
       if (bidRequest.params.publisherSubId) {
         slot.publishersubid = bidRequest.params.publisherSubId;
       }
-      if (bidRequest.params.nativeCallback) {
+      if (bidRequest.params.nativeCallback || utils.deepAccess(bidRequest, `mediaTypes.${NATIVE}`)) {
         slot.native = true;
       }
       return slot;
@@ -261,7 +268,7 @@ function buildCdbRequest(context, bidRequests, bidderRequest) {
  * @param {*} callback
  * @return {string}
  */
-function createNativeAd(id, payload, callback) {
+function createCriteoNativeAdWithCallback(id, payload, callback) {
   // Store the callback and payload in a global object to be later accessed from the creative
   window.criteo_prebid_native_slots = window.criteo_prebid_native_slots || {};
   window.criteo_prebid_native_slots[id] = { callback, payload };
@@ -279,6 +286,27 @@ function createNativeAd(id, payload, callback) {
       }
     }
   </script>`;
+}
+
+/**
+ * Create prebid compatible native ad with native payload
+ * @param {*} payload
+ * @returns prebid native ad assets
+ */
+function createPrebidNativeAd(payload) {
+  return {
+    title: payload.products[0].title,
+    body: payload.products[0].description,
+    sponsoredBy: payload.advertiser.description,
+    icon: payload.advertiser.logo,
+    image: payload.products[0].image,
+    clickUrl: payload.products[0].click_url,
+    privacyLink: payload.privacy.optout_click_url,
+    privacyIcon: payload.privacy.optout_image_url,
+    cta: payload.products[0].call_to_action,
+    price: payload.products[0].price,
+    impressionTrackers: payload.impression_pixels.map(pix => pix.url)
+  };
 }
 
 export function cryptoVerify(key, hash, code) {
