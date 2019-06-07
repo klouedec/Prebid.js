@@ -3,10 +3,8 @@ import { registerBidder } from '../src/adapters/bidderFactory';
 import { parse } from '../src/url';
 import * as utils from '../src/utils';
 import find from 'core-js/library/fn/array/find';
-import JSEncrypt from 'jsencrypt/bin/jsencrypt';
-import sha256 from 'crypto-js/sha256';
 
-const ADAPTER_VERSION = 16;
+const ADAPTER_VERSION = 17;
 const BIDDER_CODE = 'criteo';
 const CDB_ENDPOINT = '//bidder.criteo.com/cdb';
 const CRITEO_VENDOR_ID = 91;
@@ -44,35 +42,36 @@ export const spec = {
    * @return {ServerRequest}
    */
   buildRequests: (bidRequests, bidderRequest) => {
-    let url;
-    let data;
+    let loadFastBidPromise = new Promise((resolve, reject) => resolve(false));
+    let callCdbPromise = new Promise((resolve, reject) => resolve({}));
 
     // If publisher tag not already loaded try to get it from fast bid
     if (!publisherTagAvailable()) {
       window.Criteo = window.Criteo || {};
       window.Criteo.usePrebidEvents = false;
 
-      tryGetCriteoFastBid();
+      loadFastBidPromise = tryGetCriteoFastBid() || loadFastBidPromise;
 
       // Reload the PublisherTag after the timeout to ensure FastBid is up-to-date and tracking done properly
       setTimeout(() => {
         loadExternalScript(PUBLISHER_TAG_URL, BIDDER_CODE);
       }, bidderRequest.timeout);
-    }
-
-    if (publisherTagAvailable()) {
-      const adapter = new Criteo.PubTag.Adapters.Prebid(PROFILE_ID_PUBLISHERTAG, ADAPTER_VERSION, bidRequests, bidderRequest, '$prebid.version$');
-      url = adapter.buildCdbUrl();
-      data = adapter.buildCdbRequest();
     } else {
-      const context = buildContext(bidRequests);
-      url = buildCdbUrl(context);
-      data = buildCdbRequest(context, bidRequests, bidderRequest);
+      let cdbRequest = buildRequest(bidRequests, bidderRequest);
+      return { method: 'POST', url: cdbRequest.url, data: cdbRequest.data, bidRequests };
     }
 
-    if (data) {
-      return { method: 'POST', url, data, bidRequests };
-    }
+    callCdbPromise = loadFastBidPromise
+      .then(_ => {
+        let cdbRequest = buildRequest(bidRequests, bidderRequest);
+        return callCdbWithXhr(cdbRequest.url, cdbRequest.data);
+      }).catch(error => {
+        console.error('Unable to try get criteo fast bid, error is', error);
+      }).then(response => {
+        return response;
+      });
+
+    return { method: 'PROMISE', promise: callCdbPromise, bidRequests };
   },
 
   /**
@@ -151,6 +150,43 @@ export const spec = {
 };
 
 /**
+ * Call cdb bidding request with XHR
+ *
+ * @param {string} url
+ * @param {object} data
+ */
+function callCdbWithXhr(url, data) {
+  return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.onload = function () {
+      if (this.status >= 200 && this.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.response));
+        } catch (e) {
+          // Doesn't matter if not response
+          resolve();
+        }
+      } else {
+        reject({
+          status: this.status,
+          statusText: xhr.statusText
+        });
+      }
+    };
+    xhr.onerror = function () {
+      reject({
+        status: this.status,
+        statusText: xhr.statusText
+      });
+    };
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', 'text/plain');
+    xhr.send(JSON.stringify(data));
+  });
+}
+
+/**
  * @return {boolean}
  */
 function publisherTagAvailable() {
@@ -203,6 +239,21 @@ function buildCdbUrl(context) {
   }
 
   return url;
+}
+
+function buildRequest(bidRequests, bidderRequest) {
+  let url;
+  let data;
+  if (publisherTagAvailable()) {
+    const adapter = new Criteo.PubTag.Adapters.Prebid(PROFILE_ID_PUBLISHERTAG, ADAPTER_VERSION, bidRequests, bidderRequest, '$prebid.version$');
+    url = adapter.buildCdbUrl();
+    data = adapter.buildCdbRequest();
+  } else {
+    const context = buildContext(bidRequests);
+    url = buildCdbUrl(context);
+    data = buildCdbRequest(context, bidRequests, bidderRequest);
+  }
+  return { url, data };
 }
 
 /**
@@ -281,12 +332,61 @@ function createNativeAd(id, payload, callback) {
   </script>`;
 }
 
-export function cryptoVerify(key, hash, code) {
-  var jse = new JSEncrypt();
-  jse.setPublicKey(key);
-  return jse.verify(code, hash, sha256);
+function str2ab(str) {
+  var buf = new ArrayBuffer(str.length);
+  var bufView = new Uint8Array(buf);
+  for (var i = 0; i < str.length; ++i) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
 }
 
+/**
+ * Verify fastBid with cryto.subtle
+ * @param {string} key
+ * @param {string} hash
+ * @param {string} code
+ * @returns Promise<boolean> if fastbid is valid
+ */
+function cryptoVerifyAsync(key, hash, code) {
+  // Standard
+  var standardSubtle = window.crypto && (window.crypto.subtle || window.crypto.webkitSubtle);
+  var algo = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' }};
+  if (standardSubtle) {
+    return standardSubtle.importKey('jwk', key, algo, false, ['verify']).then(
+      function (cryptoKey) {
+        return standardSubtle.verify(algo, cryptoKey, str2ab(atob(hash)), str2ab(code));
+      },
+      function (_) { }
+    );
+  }
+
+  // IE11
+  if (window.msCrypto) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var eImport = window.msCrypto.subtle.importKey('jwk', str2ab(JSON.stringify(key)), algo, false, ['verify']);
+        eImport.onerror = function (evt) { reject(evt) };
+        eImport.oncomplete = function (evtKey) {
+          var cryptoKey = evtKey.target.result;
+          var eVerify = window.msCrypto.subtle.verify(algo, cryptoKey, str2ab(atob(hash)), str2ab(code));
+          eVerify.onerror = function (evt) { reject(evt); };
+          eVerify.oncomplete = function (evt) { resolve(evt.target.result); };
+        };
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  // cypto not available, return undefined
+}
+
+/**
+ * check if fastbid is valid
+ * @param {string} fastBid
+ * @returns {Promise<boolean>} if fastBid is valid, undefined if error
+ */
 function validateFastBid(fastBid) {
   // The value stored must contain the file's encrypted hash as first line
   const firstLineEnd = fastBid.indexOf('\n');
@@ -302,7 +402,7 @@ function validateFastBid(fastBid) {
 
   // Verify the hash using cryptography
   try {
-    return cryptoVerify(FAST_BID_PUBKEY, fileEncryptedHash, publisherTag);
+    return cryptoVerifyAsync(FAST_BID_PUBKEY, fileEncryptedHash, publisherTag);
   } catch (e) {
     utils.logWarn('Failed to verify Criteo FastBid');
     return undefined;
@@ -310,18 +410,22 @@ function validateFastBid(fastBid) {
 }
 
 /**
- * @return {boolean}
+ * @return {Promise<boolean>}
  */
 function tryGetCriteoFastBid() {
   try {
     const fastBid = localStorage.getItem('criteo_fast_bid');
     if (fastBid !== null) {
-      if (validateFastBid(fastBid) === false) {
-        utils.logWarn('Invalid Criteo FastBid found');
-        localStorage.removeItem('criteo_fast_bid');
-      } else {
-        utils.logInfo('Using Criteo FastBid');
-        eval(fastBid); // eslint-disable-line no-eval
+      const p = validateFastBid(fastBid);
+      if (p !== undefined) {
+        return p.then((isValid) => {
+          // check if fastBid is valid
+          utils.logInfo('FastBid is Valid');
+          eval(fastBid); // eslint-disable-line no-eval
+          return isValid;
+        }).catch(error => {
+          utils.logWarn('catch validateFastBid error is', error);
+        });
       }
     }
   } catch (e) {
