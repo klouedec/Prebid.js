@@ -62,12 +62,17 @@ export const spec = {
     }
 
     callCdbPromise = loadFastBidPromise
+      .catch(error => {
+        console.error('Unable to try get criteo fast bid, error is', error);
+      })
       .then(_ => {
         let cdbRequest = buildRequest(bidRequests, bidderRequest);
         return callCdbWithXhr(cdbRequest.url, cdbRequest.data);
-      }).catch(error => {
-        console.error('Unable to try get criteo fast bid, error is', error);
-      }).then(response => {
+      })
+      .catch(error => {
+        console.error('Unable to call criteo, error is', error);
+      })
+      .then(response => {
         return response;
       });
 
@@ -168,17 +173,11 @@ function callCdbWithXhr(url, data) {
           resolve();
         }
       } else {
-        reject({
-          status: this.status,
-          statusText: xhr.statusText
-        });
+        reject(new Error(xhr.statusText));
       }
     };
     xhr.onerror = function () {
-      reject({
-        status: this.status,
-        statusText: xhr.statusText
-      });
+      reject(new Error(xhr.statusText));
     };
     xhr.withCredentials = true;
     xhr.setRequestHeader('Content-Type', 'text/plain');
@@ -351,7 +350,7 @@ function str2ab(str) {
 function cryptoVerifyAsync(key, hash, code) {
   // Standard
   var standardSubtle = window.crypto && (window.crypto.subtle || window.crypto.webkitSubtle);
-  var algo = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' }};
+  var algo = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } };
   if (standardSubtle) {
     return standardSubtle.importKey('jwk', key, algo, false, ['verify']).then(
       function (cryptoKey) {

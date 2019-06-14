@@ -66,7 +66,7 @@ describe('The Criteo bidding adapter', function () {
       },
     };
 
-    it('should properly build a zoneId request', function () {
+    it('should properly build a zoneId request', function (done) {
       const bidRequests = [
         {
           bidder: 'criteo',
@@ -78,23 +78,25 @@ describe('The Criteo bidding adapter', function () {
           },
         },
       ];
-      const request = spec.buildRequests(bidRequests, bidderRequest);
-      expect(request.url).to.match(/^\/\/bidder\.criteo\.com\/cdb\?profileId=207&av=\d+&wv=[^&]+&cb=\d/);
-      expect(request.method).to.equal('POST');
-      const ortbRequest = request.data;
-      expect(ortbRequest.publisher.url).to.equal(utils.getTopWindowUrl());
-      expect(ortbRequest.slots).to.have.lengthOf(1);
-      expect(ortbRequest.slots[0].impid).to.equal('bid-123');
-      expect(ortbRequest.slots[0].transactionid).to.equal('transaction-123');
-      expect(ortbRequest.slots[0].sizes).to.have.lengthOf(1);
-      expect(ortbRequest.slots[0].sizes[0]).to.equal('728x90');
-      expect(ortbRequest.slots[0].zoneid).to.equal(123);
-      expect(ortbRequest.gdprConsent.consentData).to.equal('concentDataString');
-      expect(ortbRequest.gdprConsent.gdprApplies).to.equal(true);
-      expect(ortbRequest.gdprConsent.consentGiven).to.equal(true);
+      spec.buildRequests(bidRequests, bidderRequest).promise.then(request => {
+        expect(request.url).to.match(/^\/\/bidder\.criteo\.com\/cdb\?profileId=207&av=\d+&wv=[^&]+&cb=\d/);
+        expect(request.method).to.equal('POST');
+        const ortbRequest = request.data;
+        expect(ortbRequest.publisher.url).to.equal(utils.getTopWindowUrl());
+        expect(ortbRequest.slots).to.have.lengthOf(1);
+        expect(ortbRequest.slots[0].impid).to.equal('bid-123');
+        expect(ortbRequest.slots[0].transactionid).to.equal('transaction-123');
+        expect(ortbRequest.slots[0].sizes).to.have.lengthOf(1);
+        expect(ortbRequest.slots[0].sizes[0]).to.equal('728x90');
+        expect(ortbRequest.slots[0].zoneid).to.equal(123);
+        expect(ortbRequest.gdprConsent.consentData).to.equal('concentDataString');
+        expect(ortbRequest.gdprConsent.gdprApplies).to.equal(true);
+        expect(ortbRequest.gdprConsent.consentGiven).to.equal(true);
+        done();
+      });
     });
 
-    it('should properly build a networkId request', function () {
+    it('should properly build a networkId request', function (done) {
       const bidderRequest = {
         timeout: 3000,
         gdprConsent: {
@@ -118,24 +120,26 @@ describe('The Criteo bidding adapter', function () {
           },
         },
       ];
-      const request = spec.buildRequests(bidRequests, bidderRequest);
-      expect(request.url).to.match(/^\/\/bidder\.criteo\.com\/cdb\?profileId=207&av=\d+&wv=[^&]+&cb=\d/);
-      expect(request.method).to.equal('POST');
-      const ortbRequest = request.data;
-      expect(ortbRequest.publisher.url).to.equal(utils.getTopWindowUrl());
-      expect(ortbRequest.publisher.networkid).to.equal(456);
-      expect(ortbRequest.slots).to.have.lengthOf(1);
-      expect(ortbRequest.slots[0].impid).to.equal('bid-123');
-      expect(ortbRequest.slots[0].transactionid).to.equal('transaction-123');
-      expect(ortbRequest.slots[0].sizes).to.have.lengthOf(2);
-      expect(ortbRequest.slots[0].sizes[0]).to.equal('300x250');
-      expect(ortbRequest.slots[0].sizes[1]).to.equal('728x90');
-      expect(ortbRequest.gdprConsent.consentData).to.equal(undefined);
-      expect(ortbRequest.gdprConsent.gdprApplies).to.equal(false);
-      expect(ortbRequest.gdprConsent.consentGiven).to.equal(undefined);
+      spec.buildRequests(bidRequests, bidderRequest).promise.then(request => {
+        expect(request.url).to.match(/^\/\/bidder\.criteo\.com\/cdb\?profileId=207&av=\d+&wv=[^&]+&cb=\d/);
+        expect(request.method).to.equal('POST');
+        const ortbRequest = request.data;
+        expect(ortbRequest.publisher.url).to.equal(utils.getTopWindowUrl());
+        expect(ortbRequest.publisher.networkid).to.equal(456);
+        expect(ortbRequest.slots).to.have.lengthOf(1);
+        expect(ortbRequest.slots[0].impid).to.equal('bid-123');
+        expect(ortbRequest.slots[0].transactionid).to.equal('transaction-123');
+        expect(ortbRequest.slots[0].sizes).to.have.lengthOf(2);
+        expect(ortbRequest.slots[0].sizes[0]).to.equal('300x250');
+        expect(ortbRequest.slots[0].sizes[1]).to.equal('728x90');
+        expect(ortbRequest.gdprConsent.consentData).to.equal(undefined);
+        expect(ortbRequest.gdprConsent.gdprApplies).to.equal(false);
+        expect(ortbRequest.gdprConsent.consentGiven).to.equal(undefined);
+        done();
+      });
     });
 
-    it('should properly build a mixed request', function () {
+    it('should properly build a mixed request', function (done) {
       const bidderRequest = { timeout: 3000 };
       const bidRequests = [
         {
@@ -157,26 +161,28 @@ describe('The Criteo bidding adapter', function () {
           },
         },
       ];
-      const request = spec.buildRequests(bidRequests, bidderRequest);
-      expect(request.url).to.match(/^\/\/bidder\.criteo\.com\/cdb\?profileId=207&av=\d+&wv=[^&]+&cb=\d/);
-      expect(request.method).to.equal('POST');
-      const ortbRequest = request.data;
-      expect(ortbRequest.publisher.url).to.equal(utils.getTopWindowUrl());
-      expect(ortbRequest.publisher.networkid).to.equal(456);
-      expect(ortbRequest.slots).to.have.lengthOf(2);
-      expect(ortbRequest.slots[0].impid).to.equal('bid-123');
-      expect(ortbRequest.slots[0].transactionid).to.equal('transaction-123');
-      expect(ortbRequest.slots[0].sizes).to.have.lengthOf(1);
-      expect(ortbRequest.slots[0].sizes[0]).to.equal('728x90');
-      expect(ortbRequest.slots[1].impid).to.equal('bid-234');
-      expect(ortbRequest.slots[1].transactionid).to.equal('transaction-234');
-      expect(ortbRequest.slots[1].sizes).to.have.lengthOf(2);
-      expect(ortbRequest.slots[1].sizes[0]).to.equal('300x250');
-      expect(ortbRequest.slots[1].sizes[1]).to.equal('728x90');
-      expect(ortbRequest.gdprConsent).to.equal(undefined);
+      spec.buildRequests(bidRequests, bidderRequest).promise.then(request => {
+        expect(request.url).to.match(/^\/\/bidder\.criteo\.com\/cdb\?profileId=207&av=\d+&wv=[^&]+&cb=\d/);
+        expect(request.method).to.equal('POST');
+        const ortbRequest = request.data;
+        expect(ortbRequest.publisher.url).to.equal(utils.getTopWindowUrl());
+        expect(ortbRequest.publisher.networkid).to.equal(456);
+        expect(ortbRequest.slots).to.have.lengthOf(2);
+        expect(ortbRequest.slots[0].impid).to.equal('bid-123');
+        expect(ortbRequest.slots[0].transactionid).to.equal('transaction-123');
+        expect(ortbRequest.slots[0].sizes).to.have.lengthOf(1);
+        expect(ortbRequest.slots[0].sizes[0]).to.equal('728x90');
+        expect(ortbRequest.slots[1].impid).to.equal('bid-234');
+        expect(ortbRequest.slots[1].transactionid).to.equal('transaction-234');
+        expect(ortbRequest.slots[1].sizes).to.have.lengthOf(2);
+        expect(ortbRequest.slots[1].sizes[0]).to.equal('300x250');
+        expect(ortbRequest.slots[1].sizes[1]).to.equal('728x90');
+        expect(ortbRequest.gdprConsent).to.equal(undefined);
+        done();
+      });
     });
 
-    it('should properly build request with undefined gdpr consent fields when they are not provided', function () {
+    it('should properly build request with undefined gdpr consent fields when they are not provided', function (done) {
       const bidRequests = [
         {
           bidder: 'criteo',
@@ -193,10 +199,13 @@ describe('The Criteo bidding adapter', function () {
         },
       };
 
-      const ortbRequest = spec.buildRequests(bidRequests, bidderRequest).data;
-      expect(ortbRequest.gdprConsent.consentData).to.equal(undefined);
-      expect(ortbRequest.gdprConsent.gdprApplies).to.equal(undefined);
-      expect(ortbRequest.gdprConsent.consentGiven).to.equal(undefined);
+      spec.buildRequests(bidRequests, bidderRequest).promise.then(request => {
+        const ortbRequest = request.data;
+        expect(ortbRequest.gdprConsent.consentData).to.equal(undefined);
+        expect(ortbRequest.gdprConsent.gdprApplies).to.equal(undefined);
+        expect(ortbRequest.gdprConsent.consentGiven).to.equal(undefined);
+        done();
+      });
     });
   });
 
