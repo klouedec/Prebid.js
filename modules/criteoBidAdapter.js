@@ -3,8 +3,10 @@ import { registerBidder } from '../src/adapters/bidderFactory';
 import { parse } from '../src/url';
 import * as utils from '../src/utils';
 import find from 'core-js/library/fn/array/find';
+import { ajax } from '../src/ajax';
+import Promise from 'promise-polyfill';
 
-const ADAPTER_VERSION = 17;
+export const ADAPTER_VERSION = 18;
 const BIDDER_CODE = 'criteo';
 const CDB_ENDPOINT = '//bidder.criteo.com/cdb';
 const CRITEO_VENDOR_ID = 91;
@@ -12,17 +14,19 @@ const INTEGRATION_MODES = {
   'amp': 1,
 };
 const PROFILE_ID_INLINE = 207;
-const PROFILE_ID_PUBLISHERTAG = 185;
+export const PROFILE_ID_PUBLISHERTAG = 185;
 
 // Unminified source code can be found in: https://github.com/Prebid-org/prebid-js-external-js-criteo/blob/master/dist/prod.js
 const PUBLISHER_TAG_URL = '//static.criteo.net/js/ld/publishertag.prebid.js';
 
-export const FAST_BID_PUBKEY = `-----BEGIN PUBLIC KEY-----
-MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDO1BjAITkFTtP0IMzmF7qsqhpu
-y1dGaTPHnjMU9mRZsrnfR3C0sEN5pYEzEcFRPnkJjJuhH8Rnh5+CE+LcKg0Z8ZZ7
-OmOSj0/qnYTAYCu0cR5LiyWG79KlIgUyMbp92ulGg24gAyGrVn4+v/4c53WlOEUp
-4YWvb82G0CD5NcDNpQIDAQAB
------END PUBLIC KEY-----`;
+export const FAST_BID_PUBKEY_IE11 = {
+  kty: 'RSA',
+  n: 'ztQYwCE5BU7T9CDM5he6rKoabstXRmkzx54zFPZkWbK530dwtLBDeaWBMxHBUT55CYyboR_EZ4efghPi3CoNGfGWezpjko9P6p2EwGArtHEeS4slhu_SpSIFMjG6fdrpRoNuIAMhq1Z-Pr_-HOd1pThFKeGFr2_NhtAg-TXAzaU',
+  e: 'AQAB',
+  alg: 'RS256'
+};
+
+export const FAST_BID_PUBKEY = Object.assign({}, FAST_BID_PUBKEY_IE11, { ext: 'true' });
 
 /** @type {BidderSpec} */
 export const spec = {
@@ -62,12 +66,33 @@ export const spec = {
     }
 
     callCdbPromise = loadFastBidPromise
-      .catch(error => {
-        console.error('Unable to try get criteo fast bid, error is', error);
-      })
       .then(_ => {
         let cdbRequest = buildRequest(bidRequests, bidderRequest);
-        return callCdbWithXhr(cdbRequest.url, cdbRequest.data);
+
+        return new Promise(function (resolve, reject) {
+          ajax(
+            cdbRequest.url,
+            {
+              success: function(responseText, _) {
+                try {
+                  resolve(JSON.parse(responseText));
+                } catch (e) {
+                  // Doesn't matter if not response
+                  resolve();
+                }
+              },
+              error: function(statusText, _) {
+                reject(new Error(statusText));
+              }
+            },
+            JSON.stringify(cdbRequest.data),
+            {
+              method: 'POST',
+              contentType: 'text/plain',
+              withCredentials: true
+            }
+          );
+        });
       })
       .catch(error => {
         console.error('Unable to call criteo, error is', error);
@@ -85,7 +110,7 @@ export const spec = {
    * @return {Bid[]}
    */
   interpretResponse: (response, request) => {
-    const body = response.body || response;
+    const body = response !== undefined ? (response.body || response) : undefined;
 
     if (publisherTagAvailable()) {
       const adapter = Criteo.PubTag.Adapters.Prebid.GetAdapter(request);
@@ -153,37 +178,6 @@ export const spec = {
     }
   },
 };
-
-/**
- * Call cdb bidding request with XHR
- *
- * @param {string} url
- * @param {object} data
- */
-function callCdbWithXhr(url, data) {
-  return new Promise(function (resolve, reject) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
-    xhr.onload = function () {
-      if (this.status >= 200 && this.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.response));
-        } catch (e) {
-          // Doesn't matter if not response
-          resolve();
-        }
-      } else {
-        reject(new Error(xhr.statusText));
-      }
-    };
-    xhr.onerror = function () {
-      reject(new Error(xhr.statusText));
-    };
-    xhr.withCredentials = true;
-    xhr.setRequestHeader('Content-Type', 'text/plain');
-    xhr.send(JSON.stringify(data));
-  });
-}
 
 /**
  * @return {boolean}
@@ -331,7 +325,7 @@ function createNativeAd(id, payload, callback) {
   </script>`;
 }
 
-function str2ab(str) {
+export function str2ab(str) {
   var buf = new ArrayBuffer(str.length);
   var bufView = new Uint8Array(buf);
   for (var i = 0; i < str.length; ++i) {
@@ -342,21 +336,19 @@ function str2ab(str) {
 
 /**
  * Verify fastBid with cryto.subtle
- * @param {string} key
  * @param {string} hash
  * @param {string} code
  * @returns Promise<boolean> if fastbid is valid
  */
-function cryptoVerifyAsync(key, hash, code) {
+function cryptoVerifyAsync(hash, code) {
   // Standard
   var standardSubtle = window.crypto && (window.crypto.subtle || window.crypto.webkitSubtle);
   var algo = { name: 'RSASSA-PKCS1-v1_5', hash: { name: 'SHA-256' } };
   if (standardSubtle) {
-    return standardSubtle.importKey('jwk', key, algo, false, ['verify']).then(
+    return standardSubtle.importKey('jwk', FAST_BID_PUBKEY, algo, false, ['verify']).then(
       function (cryptoKey) {
         return standardSubtle.verify(algo, cryptoKey, str2ab(atob(hash)), str2ab(code));
-      },
-      function (_) { }
+      }
     );
   }
 
@@ -364,7 +356,7 @@ function cryptoVerifyAsync(key, hash, code) {
   if (window.msCrypto) {
     return new Promise(function (resolve, reject) {
       try {
-        var eImport = window.msCrypto.subtle.importKey('jwk', str2ab(JSON.stringify(key)), algo, false, ['verify']);
+        var eImport = window.msCrypto.subtle.importKey('jwk', str2ab(JSON.stringify(FAST_BID_PUBKEY_IE11)), algo, false, ['verify']);
         eImport.onerror = function (evt) { reject(evt) };
         eImport.oncomplete = function (evtKey) {
           var cryptoKey = evtKey.target.result;
@@ -392,7 +384,7 @@ function validateFastBid(fastBid) {
   const firstLine = fastBid.substr(0, firstLineEnd).trim();
   if (firstLine.substr(0, 9) !== '// Hash: ') {
     utils.logWarn('No hash found in FastBid');
-    return false;
+    return undefined;
   }
 
   // Remove the hash part from the locally stored value
@@ -401,7 +393,7 @@ function validateFastBid(fastBid) {
 
   // Verify the hash using cryptography
   try {
-    return cryptoVerifyAsync(FAST_BID_PUBKEY, fileEncryptedHash, publisherTag);
+    return cryptoVerifyAsync(fileEncryptedHash, publisherTag);
   } catch (e) {
     utils.logWarn('Failed to verify Criteo FastBid');
     return undefined;
@@ -411,7 +403,7 @@ function validateFastBid(fastBid) {
 /**
  * @return {Promise<boolean>}
  */
-function tryGetCriteoFastBid() {
+export function tryGetCriteoFastBid() {
   try {
     const fastBid = localStorage.getItem('criteo_fast_bid');
     if (fastBid !== null) {
