@@ -1,8 +1,8 @@
-import {ajax} from 'src/ajax';
-import adapter from 'src/AnalyticsAdapter';
-import CONSTANTS from 'src/constants.json';
-import adaptermanager from 'src/adaptermanager';
-import {deepClone, logInfo} from 'src/utils';
+import {ajax} from '../src/ajax';
+import adapter from '../src/AnalyticsAdapter';
+import CONSTANTS from '../src/constants.json';
+import adapterManager from '../src/adapterManager';
+import {deepClone, logInfo} from '../src/utils';
 
 const {
   EVENTS: {
@@ -132,7 +132,7 @@ function sendCachedEvents() {
   );
 }
 
-adaptermanager.registerAnalyticsAdapter({
+adapterManager.registerAnalyticsAdapter({
   adapter: criteoAdapter,
   code: 'criteo'
 });
