@@ -412,12 +412,14 @@ export function tryGetCriteoFastBid() {
   try {
     const fastBid = localStorage.getItem('criteo_fast_bid');
     if (fastBid !== null) {
+      // check if fastBid is valid
       const p = validateFastBid(fastBid);
       if (p !== undefined) {
         return p.then((isValid) => {
-          // check if fastBid is valid
-          utils.logInfo('FastBid is Valid');
-          eval(fastBid); // eslint-disable-line no-eval
+          if (isValid) {
+            utils.logInfo('FastBid is Valid');
+            eval(fastBid); // eslint-disable-line no-eval
+          }
           return isValid;
         }).catch(error => {
           utils.logWarn('catch validateFastBid error is', error);
