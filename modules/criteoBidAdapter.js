@@ -377,25 +377,14 @@ function cryptoVerifyAsync(hash, code) {
 
 /**
  * check if fastbid is valid
- * @param {string} fastBid
+ * @param {string} publisherTagHash
+ * @param {string} publisherTag
  * @returns {Promise<boolean>} if fastBid is valid, undefined if error
  */
-function validateFastBid(fastBid) {
-  // The value stored must contain the file's encrypted hash as first line
-  const firstLineEnd = fastBid.indexOf('\n');
-  const firstLine = fastBid.substr(0, firstLineEnd).trim();
-  if (firstLine.substr(0, 9) !== '// Hash: ') {
-    utils.logWarn('No hash found in FastBid');
-    return undefined;
-  }
-
-  // Remove the hash part from the locally stored value
-  const fileEncryptedHash = firstLine.substr(9);
-  const publisherTag = fastBid.substr(firstLineEnd + 1);
-
+function validateFastBid(publisherTagHash, publisherTag) {
   // Verify the hash using cryptography
   try {
-    return cryptoVerifyAsync(fileEncryptedHash, publisherTag);
+    return cryptoVerifyAsync(publisherTagHash, publisherTag);
   } catch (e) {
     utils.logWarn('Failed to verify Criteo FastBid');
     return undefined;
@@ -407,20 +396,40 @@ function validateFastBid(fastBid) {
  */
 export function tryGetCriteoFastBid() {
   try {
-    const fastBid = localStorage.getItem('criteo_fast_bid');
-    if (fastBid !== null) {
-      // check if fastBid is valid
-      const p = validateFastBid(fastBid);
-      if (p !== undefined) {
-        return p.then((isValid) => {
-          if (isValid) {
-            utils.logInfo('FastBid is Valid');
-            eval(fastBid); // eslint-disable-line no-eval
-          }
-          return isValid;
-        }).catch(error => {
-          utils.logWarn('catch validateFastBid error is', error);
-        });
+    const fastBidStorageKey = 'criteo_fast_bid';
+    const hashPrefix = '// Hash: ';
+    const fastBidFromStorage = localStorage.getItem(fastBidStorageKey);
+
+    if (fastBidFromStorage !== null) {
+      // The value stored must contain the file's encrypted hash as first line
+      const firstLineEndPosition = fastBidFromStorage.indexOf('\n');
+      const firstLine = fastBidFromStorage.substr(0, firstLineEndPosition).trim();
+
+      if (firstLine.substr(0, hashPrefix.length) !== hashPrefix) {
+        utils.logWarn('No hash found in FastBid');
+        localStorage.removeItem(fastBidStorageKey);
+      } else {
+        // Remove the hash part from the locally stored value
+        const publisherTagHash = firstLine.substr(hashPrefix.length);
+        const publisherTag = fastBidFromStorage.substr(firstLineEndPosition + 1);
+
+        // check if fastBid is valid
+        const p = validateFastBid(publisherTagHash, publisherTag);
+        if (p !== undefined) {
+          return p.then((isValid) => {
+            if (isValid) {
+              utils.logInfo('Using Criteo FastBid');
+              eval(publisherTag); // eslint-disable-line no-eval
+            } else {
+              utils.logWarn('Invalid Criteo FastBid found');
+              localStorage.removeItem(fastBidStorageKey);
+            }
+            return isValid;
+          }).catch(error => {
+            utils.logWarn('catch validateFastBid error is', error);
+            localStorage.removeItem(fastBidStorageKey);
+          });
+        }
       }
     }
   } catch (e) {
