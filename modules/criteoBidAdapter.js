@@ -73,13 +73,18 @@ export const spec = {
           ajax(
             cdbRequest.url,
             {
-              success: function(responseText, _) {
+              success: function(response, responseObj) {
                 try {
-                  resolve(JSON.parse(responseText));
+                  response = JSON.parse(response);
                 } catch (e) {
-                  // Doesn't matter if not response
-                  resolve();
+                  // Doesn't matter if not JSON, particularly, it will happen when we receive a 204
                 }
+                resolve({
+                  body: response,
+                  headers: {
+                    get: responseObj.getResponseHeader.bind(responseObj),
+                  },
+                });
               },
               error: function(statusText, _) {
                 reject(new Error(statusText));
