@@ -10,9 +10,6 @@ export const ADAPTER_VERSION = 18;
 const BIDDER_CODE = 'criteo';
 const CDB_ENDPOINT = '//bidder.criteo.com/cdb';
 const CRITEO_VENDOR_ID = 91;
-const INTEGRATION_MODES = {
-  'amp': 1,
-};
 const PROFILE_ID_INLINE = 207;
 export const PROFILE_ID_PUBLISHERTAG = 185;
 
@@ -203,12 +200,12 @@ function buildContext(bidRequests) {
     url: url,
     debug: queryString['pbt_debug'] === '1',
     noLog: queryString['pbt_nolog'] === '1',
-    integrationMode: undefined,
+    amp: false,
   };
 
   bidRequests.forEach(bidRequest => {
-    if (bidRequest.params.integrationMode) {
-      context.integrationMode = bidRequest.params.integrationMode;
+    if (bidRequest.params.integrationMode === 'amp') {
+      context.amp = true;
     }
   })
 
@@ -226,8 +223,8 @@ function buildCdbUrl(context) {
   url += '&wv=' + encodeURIComponent('$prebid.version$');
   url += '&cb=' + String(Math.floor(Math.random() * 99999999999));
 
-  if (context.integrationMode in INTEGRATION_MODES) {
-    url += '&im=' + INTEGRATION_MODES[context.integrationMode];
+  if (context.amp) {
+    url += '&im=1';
   }
   if (context.debug) {
     url += '&debug=1';
