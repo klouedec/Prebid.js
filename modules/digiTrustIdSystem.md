@@ -24,7 +24,9 @@ for further instructions.
 								site: 'example_site_id'
 							},
 							callback: function (digiTrustResult) {
-							// This callback method is optional
+							// This callback method is optional and used for error handling
+							// in many if not most cases.
+							/*
 								if (digiTrustResult.success) {
 									// Success in Digitrust init;
 									// 'DigiTrust Id (encrypted): ' + digiTrustResult.identity.id;
@@ -32,6 +34,7 @@ for further instructions.
 								else {
 									// Digitrust init failed
 								}
+							*/
 							}
 						},
 						storage: {
@@ -127,7 +130,6 @@ without losing DigiTrust support in the process.
 ## Parameter Descriptions for the `usersync` Configuration Section
 The below parameters apply only to the DigiTrust ID integration.
 
-{: .table .table-bordered .table-striped }
 | Param under usersync.userIds[] | Scope | Type | Description | Example |
 | --- | --- | --- | --- | --- |
 | name | Required | String | ID value for the DigiTrust module - `"digitrust"` | `"digitrust"` |
