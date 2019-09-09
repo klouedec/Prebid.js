@@ -6,7 +6,7 @@ import { parse } from '../src/url';
 import * as utils from '../src/utils';
 import find from 'core-js/library/fn/array/find';
 import { ajax } from '../src/ajax';
-import Promise from 'promise-polyfill/dist/polyfill';
+import Promise from 'promise-polyfill/src/index';
 
 export const ADAPTER_VERSION = 18;
 const BIDDER_CODE = 'criteo';
